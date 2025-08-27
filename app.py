@@ -1,3 +1,7 @@
+
+# Force install dependencies at runtime (quick fix for Streamlit Cloud)
+os.system("pip install joblib scikit-learn nltk pandas numpy matplotlib seaborn")
+
 import streamlit as st
 import joblib
 import os
