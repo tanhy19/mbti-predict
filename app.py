@@ -1,7 +1,7 @@
-
 import streamlit as st
 import joblib
 import os
+import numpy as np
 
 def safe_load(path):
     if os.path.exists(path):
@@ -35,6 +35,14 @@ models = {
     },
 }
 
+# Mapping for numeric predictions -> MBTI letters
+label_map = {
+    "I/E": {0: "I", 1: "E"},
+    "N/S": {0: "N", 1: "S"},
+    "F/T": {0: "F", 1: "T"},
+    "P/J": {0: "P", 1: "J"}
+}
+
 st.title("🔮 MBTI Personality Predictor")
 
 user_input = st.text_area("Enter some text:")
@@ -50,9 +58,29 @@ if st.button("Predict"):
         # Vectorize input
         X_input = vectorizer.transform([user_input])
         preds = []
+        probs_out = {}
+
         for dim in ["I/E", "N/S", "F/T", "P/J"]:
             model = models[model_choice][dim]
             if model:
-                preds.append(model.predict(X_input)[0])
+                raw_pred = model.predict(X_input)[0]
+                letter = label_map[dim][raw_pred]
+                preds.append(letter)
+
+                # If model supports predict_proba, show probabilities
+                if hasattr(model, "predict_proba"):
+                    proba = model.predict_proba(X_input)[0]
+                    probs_out[dim] = {
+                        label_map[dim][0]: f"{proba[0]*100:.1f}%",
+                        label_map[dim][1]: f"{proba[1]*100:.1f}%"
+                    }
+
         if preds:
-            st.success(f"🎯 Predicted MBTI type: **{''.join(preds)}**")
+            mbti = "".join(preds)
+            st.success(f"🎯 Predicted MBTI type: **{mbti}**")
+
+            # Show confidence per dimension
+            if probs_out:
+                st.subheader("📊 Confidence per Dimension")
+                for dim, scores in probs_out.items():
+                    st.write(f"**{dim}** → {scores}")
