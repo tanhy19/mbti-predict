@@ -2,15 +2,17 @@ import streamlit as st
 import joblib
 import os
 
-# 🔹 Helper function to safely load models from root
 def safe_load(filename):
     if os.path.exists(filename):
         return joblib.load(filename)
     else:
-        st.error(f"❌ Model not found: {filename}")
+        st.error(f"❌ File not found: {filename}")
         return None
 
-# 🔹 Define your models dictionary (all at root)
+# Load vectorizer
+vectorizer = safe_load("vectorizer.pkl")
+
+# Load models
 models = {
     "Naive Bayes": {
         'I/E': safe_load('naivebayes_ie.pkl'),
@@ -32,23 +34,26 @@ models = {
     }
 }
 
-# 🔹 Streamlit UI
 st.title("MBTI Personality Predictor")
 st.write("Enter text and get MBTI predictions using Naive Bayes, SVM, or Random Forest!")
 
 user_input = st.text_area("📝 Enter your text here:")
-
 selected_model = st.selectbox("🔍 Choose a model:", list(models.keys()))
 
 if st.button("Predict"):
     if not user_input.strip():
         st.warning("⚠️ Please enter some text first.")
+    elif not vectorizer:
+        st.error("❌ Vectorizer is missing. Please upload vectorizer.pkl.")
     else:
+        # Transform user input with vectorizer
+        X_input = vectorizer.transform([user_input])
+
         preds = []
         for dim in ['I/E', 'N/S', 'F/T', 'P/J']:
             model = models[selected_model][dim]
             if model:
-                pred = model.predict([user_input])[0]
+                pred = model.predict(X_input)[0]
                 preds.append(pred)
                 st.write(f"**{dim} Prediction:** {pred}")
         if preds:
