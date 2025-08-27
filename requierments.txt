@@ -1,7 +1,8 @@
-streamlit>=1.22.0,<2.0
-scikit-learn==1.2.2
-joblib==1.2.0
-nltk==3.8.1
-numpy==1.25.2
-pandas==2.1.0
-
+streamlit
+scikit-learn
+joblib
+nltk
+numpy
+pandas
+matplotlib
+seaborn
