@@ -15,6 +15,44 @@ def safe_load(path):
 def is_valid_input(text):
     return bool(re.search(r'[a-zA-Z]{3,}', text)) and len(text.strip().split()) >= 5
 
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
+
+def ensemble_predict(X_input, dim):
+    votes = []
+    confidences = []
+
+    for model_name in models.keys():
+        model = models[model_name][dim]
+        if model:
+            pred = model.predict(X_input)[0]
+            votes.append(pred)
+
+            if hasattr(model, "predict_proba"):
+                proba = model.predict_proba(X_input)[0]
+                confidences.append(max(proba))
+            elif hasattr(model, "decision_function"):
+                decision = model.decision_function(X_input)
+                conf = sigmoid(decision[0])
+                confidences.append(conf)
+            else:
+                confidences.append(0.5)  # neutral confidence if unknown
+
+    # Majority vote (most common prediction)
+    final_pred = max(set(votes), key=votes.count)
+    avg_confidence = np.mean(confidences)
+
+    return final_pred, avg_confidence
+
+def confidence_color(value):
+    # Return a color hex based on confidence value 0-1
+    if value < 0.5:
+        return "#ff4b4b"  # red-ish low confidence
+    elif value < 0.7:
+        return "#f5a623"  # orange medium
+    else:
+        return "#2ecc71"  # green high confidence
+
 # ------------------ Load Resources ------------------ #
 vectorizer = safe_load("vectorizer.pkl")
 
@@ -67,101 +105,11 @@ mbti_descriptions = {
 st.set_page_config(page_title="MBTI Predictor", page_icon="🔮", layout="centered")
 
 st.title("🔮 MBTI Personality Predictor")
-st.markdown("Enter a paragraph or meaningful sentence and choose a model to predict your MBTI type.")
+st.markdown(
+    "Enter a paragraph or meaningful sentence to predict your MBTI type using an ensemble of ML models."
+)
 
-# Accuracy display
-with st.expander("📈 Model Accuracy Info"):
-    for model_name, acc in model_accuracies.items():
-        st.write(f"**{model_name}**: {acc*100:.1f}% accuracy")
-
-# Input section
-st.markdown("### 🧠 Your Input")
-user_input = st.text_area("Write about yourself:", height=200, placeholder="e.g. I love solving problems and organizing ideas logically.")
-model_choice = st.selectbox("Select a model:", list(models.keys()), index=1)
-
-# ------------------ Prediction ------------------ #
-if st.button("🚀 Predict"):
-    if not is_valid_input(user_input):
-        st.warning("⚠️ Please enter a complete sentence or paragraph with at least 5 words.")
-    elif vectorizer is None:
-        st.error("❌ Vectorizer file missing.")
-    else:
-        st.info("🔄 Processing input and predicting MBTI type...")
-
-        X_input = vectorizer.transform([user_input])
-        preds = []
-        probs_out = {}
-        decision_scores = {}
-        low_conf_warnings = []
-        missing_confidence_dims = []
-
-        for dim in ["I/E", "N/S", "F/T", "P/J"]:
-            model = models[model_choice][dim]
-            if model:
-                raw_pred = model.predict(X_input)[0]
-                letter = label_map[dim][raw_pred]
-                preds.append(letter)
-
-                if hasattr(model, "predict_proba"):
-                    proba = model.predict_proba(X_input)[0]
-                    probs_out[dim] = {
-                        label_map[dim][0]: f"{proba[0]*100:.1f}%",
-                        label_map[dim][1]: f"{proba[1]*100:.1f}%"
-                    }
-
-                    if max(proba) < 0.6:
-                        low_conf_warnings.append(f"🔍 Low confidence in **{dim}** — try providing more text.")
-                elif hasattr(model, "decision_function"):
-                    decision = model.decision_function(X_input)
-                    decision_scores[dim] = round(abs(decision[0]), 3)
-                else:
-                    missing_confidence_dims.append(dim)
-
-        if preds:
-            mbti = "".join(preds)
-            acc = model_accuracies.get(model_choice, None)
-
-            # Results Summary
-            st.markdown("---")
-            col1, col2 = st.columns([2, 1])
-            with col1:
-                st.success(f"🎯 **Predicted MBTI Type: `{mbti}`**")
-            with col2:
-                st.metric("📊 Model Accuracy", f"{acc * 100:.1f}%")
-
-            # MBTI Letter Breakdown
-            st.subheader("🧩 MBTI Breakdown")
-            col1, col2, col3, col4 = st.columns(4)
-            for i, col in enumerate([col1, col2, col3, col4]):
-                letter = preds[i]
-                col.metric(f"{list(label_map.keys())[i]}", letter, mbti_descriptions[letter])
-
-            # Confidence & Description Tabs
-            tab1, tab2 = st.tabs(["📊 Confidence", "🔎 MBTI Descriptions"])
-            with tab1:
-                if probs_out:
-                    st.markdown("#### 🔐 Probability-based Confidence")
-                    for dim, scores in probs_out.items():
-                        st.markdown(f"**{dim}** — {list(scores.items())[0][0]}: {list(scores.items())[0][1]}, "
-                                    f"{list(scores.items())[1][0]}: {list(scores.items())[1][1]}")
-                if decision_scores:
-                    st.markdown("#### 📏 Decision Function Confidence (SVM)")
-                    for dim, score in decision_scores.items():
-                        st.markdown(f"**{dim}** → Distance from boundary: `{score}`")
-                if missing_confidence_dims:
-                    st.info("ℹ️ Confidence unavailable for: " + ", ".join(missing_confidence_dims))
-
-            with tab2:
-                st.markdown("#### 🧠 Your MBTI Letters Explained")
-                for letter in mbti:
-                    st.markdown(f"- **{letter}**: {mbti_descriptions[letter]}")
-
-            if low_conf_warnings:
-                st.warning("⚠️ Some predictions have low confidence:")
-                for msg in low_conf_warnings:
-                    st.markdown(msg)
-
-# ------------------ Sidebar ------------------ #
+# Accuracy display in sidebar
 with st.sidebar:
     st.header("📚 About This App")
     st.markdown("""
@@ -173,10 +121,82 @@ This app uses **Machine Learning** models to predict your **MBTI personality** f
 - **F / T**: Feeling / Thinking  
 - **P / J**: Perceiving / Judging  
 
-### 📈 Model Accuracies:
+### 📈 Individual Model Accuracies:
 """)
     for name, acc in model_accuracies.items():
         st.write(f"- {name}: {acc*100:.1f}%")
 
     best_model = max(model_accuracies, key=model_accuracies.get)
     st.markdown(f"✅ **Best Model**: `{best_model}` ({model_accuracies[best_model]*100:.1f}%)")
+
+# Input section
+st.markdown("### 🧠 Your Input")
+user_input = st.text_area(
+    "Write about yourself (at least 5 words):", 
+    height=200, 
+    placeholder="e.g. I enjoy spending quiet time reflecting on my thoughts and feelings."
+)
+word_count = len(user_input.strip().split())
+st.markdown(f"📝 Word count: **{word_count}**")
+
+if st.button("🚀 Predict"):
+    if not is_valid_input(user_input):
+        st.warning("⚠️ Please enter a complete sentence or paragraph with at least 5 words.")
+    elif vectorizer is None:
+        st.error("❌ Vectorizer file missing.")
+    else:
+        st.info("🔄 Processing input and predicting MBTI type...")
+
+        X_input = vectorizer.transform([user_input])
+        preds = []
+        confidences = {}
+        low_conf_warnings = []
+
+        for dim in ["I/E", "N/S", "F/T", "P/J"]:
+            pred, conf = ensemble_predict(X_input, dim)
+            preds.append(label_map[dim][pred])
+            confidences[dim] = conf
+            if conf < 0.6:
+                low_conf_warnings.append(f"🔍 Low confidence in **{dim}** — try providing more text.")
+
+        mbti = "".join(preds)
+
+        st.markdown("---")
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            st.success(f"🎯 **Predicted MBTI Type: `{mbti}`**")
+        with col2:
+            avg_acc = np.mean(list(model_accuracies.values()))
+            st.metric("📊 Average Model Accuracy", f"{avg_acc*100:.1f}%")
+
+        # MBTI Letter Breakdown
+        st.subheader("🧩 MBTI Breakdown")
+        col1, col2, col3, col4 = st.columns(4)
+        for i, col in enumerate([col1, col2, col3, col4]):
+            letter = preds[i]
+            col.metric(list(label_map.keys())[i], letter, mbti_descriptions[letter])
+
+        # Confidence Display
+        st.subheader("📊 Confidence per Dimension")
+        for dim in ["I/E", "N/S", "F/T", "P/J"]:
+            conf = confidences[dim]
+            color = confidence_color(conf)
+            st.markdown(f"**{dim}:** {label_map[dim][int(conf > 0.5)]} with confidence {conf*100:.1f}%")
+            st.progress(int(conf * 100))
+
+        if low_conf_warnings:
+            st.warning("⚠️ Some predictions have low confidence:")
+            for msg in low_conf_warnings:
+                st.markdown(msg)
+
+        # MBTI Letter Descriptions
+        st.subheader("🔎 MBTI Letters Explained")
+        for letter in mbti:
+            st.markdown(f"- **{letter}**: {mbti_descriptions[letter]}")
+
+# Footer
+st.markdown("---")
+st.markdown(
+    "<small>Powered by an ensemble of Naive Bayes, SVM, and Random Forest models.</small>", 
+    unsafe_allow_html=True
+)
