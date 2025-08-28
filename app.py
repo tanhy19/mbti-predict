@@ -3,6 +3,8 @@ import joblib
 import os
 import numpy as np
 import re
+from wordcloud import WordCloud
+import matplotlib.pyplot as plt
 
 # ------------------ Helper Functions ------------------ #
 def safe_load(path):
@@ -114,7 +116,7 @@ st.markdown(
 # Sidebar with About and Model choice
 with st.sidebar:
     st.header("📚 About This App")
-    st.markdown("""
+    st.markdown(""" 
 This app uses **Machine Learning** models to predict your **MBTI personality** from text.
 
 ### 🧬 Personality Dimensions:
@@ -149,6 +151,14 @@ user_input = st.text_area(
 word_count = len(user_input.strip().split())
 st.markdown(f"📝 Word count: **{word_count}**")
 
+# Show wordcloud of user input
+if user_input:
+    wordcloud = WordCloud().generate(user_input)
+    plt.figure(figsize=(8, 6))
+    plt.imshow(wordcloud, interpolation='bilinear')
+    plt.axis('off')
+    st.pyplot()
+
 if st.button("🚀 Predict"):
     if not is_valid_input(user_input):
         st.warning("⚠️ Please enter a complete sentence or paragraph with at least 5 words.")
@@ -162,22 +172,23 @@ if st.button("🚀 Predict"):
         confidences = {}
         low_conf_warnings = []
 
-        if mode == "Ensemble":
-            for dim in ["I/E", "N/S", "F/T", "P/J"]:
-                pred, conf = ensemble_predict(X_input, dim)
-                preds.append(label_map[dim][pred])
-                confidences[dim] = conf
-                if conf < 0.6:
-                    low_conf_warnings.append(f"🔍 Low confidence in **{dim}** — try providing more text.")
+        with st.spinner("Analyzing your text..."):
+            if mode == "Ensemble":
+                for dim in ["I/E", "N/S", "F/T", "P/J"]:
+                    pred, conf = ensemble_predict(X_input, dim)
+                    preds.append(label_map[dim][pred])
+                    confidences[dim] = conf
+                    if conf < 0.6:
+                        low_conf_warnings.append(f"🔍 Low confidence in **{dim}** — try providing more text.")
 
-        else:  # Single model selected
-            for dim in ["I/E", "N/S", "F/T", "P/J"]:
-                model = models[selected_model][dim]
-                pred, conf = predict_single_model(X_input, model, dim)
-                preds.append(label_map[dim][pred])
-                confidences[dim] = conf
-                if conf < 0.6:
-                    low_conf_warnings.append(f"🔍 Low confidence in **{dim}** — try providing more text.")
+            else:  # Single model selected
+                for dim in ["I/E", "N/S", "F/T", "P/J"]:
+                    model = models[selected_model][dim]
+                    pred, conf = predict_single_model(X_input, model, dim)
+                    preds.append(label_map[dim][pred])
+                    confidences[dim] = conf
+                    if conf < 0.6:
+                        low_conf_warnings.append(f"🔍 Low confidence in **{dim}** — try providing more text.")
 
         mbti = "".join(preds)
 
@@ -194,11 +205,12 @@ if st.button("🚀 Predict"):
                 st.metric("📊 Model Accuracy", f"{acc*100:.1f}%" if acc else "N/A")
 
         # MBTI Letter Breakdown
-        st.subheader("🧩 MBTI Breakdown")
-        col1, col2, col3, col4 = st.columns(4)
-        for i, col in enumerate([col1, col2, col3, col4]):
-            letter = preds[i]
-            col.metric(list(label_map.keys())[i], letter, mbti_descriptions[letter])
+        with st.expander("🧩 MBTI Breakdown"):
+            col1, col2, col3, col4 = st.columns(4)
+            for i, col in enumerate([col1, col2, col3, col4]):
+                letter = preds[i]
+                col.metric(list(label_map.keys())[i], letter, mbti_descriptions[letter])
+                st.progress(int(confidences[list(label_map.keys())[i]] * 100))
 
         # Confidence Display
         st.subheader("📊 Confidence per Dimension")
@@ -214,9 +226,9 @@ if st.button("🚀 Predict"):
                 st.markdown(msg)
 
         # MBTI Letter Descriptions
-        st.subheader("🔎 MBTI Letters Explained")
-        for letter in mbti:
-            st.markdown(f"- **{letter}**: {mbti_descriptions[letter]}")
+        with st.expander("🔎 MBTI Letters Explained"):
+            for letter in mbti:
+                st.markdown(f"- **{letter}**: {mbti_descriptions[letter]}")
 
 # Footer
 st.markdown("---")
