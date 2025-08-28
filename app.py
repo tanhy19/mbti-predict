@@ -91,6 +91,7 @@ if st.button("Predict"):
         preds = []
         probs_out = {}
         low_conf_warnings = []
+        missing_confidence_dims = []
 
         for dim in ["I/E", "N/S", "F/T", "P/J"]:
             model = models[model_choice][dim]
@@ -99,7 +100,7 @@ if st.button("Predict"):
                 letter = label_map[dim][raw_pred]
                 preds.append(letter)
 
-                # Confidence
+                # Check confidence support
                 if hasattr(model, "predict_proba"):
                     proba = model.predict_proba(X_input)[0]
                     probs_out[dim] = {
@@ -107,35 +108,44 @@ if st.button("Predict"):
                         label_map[dim][1]: f"{proba[1]*100:.1f}%"
                     }
 
-                    # Low confidence warning
                     if max(proba) < 0.6:
                         low_conf_warnings.append(f"🔍 Low confidence in **{dim}** — try providing more text.")
+                else:
+                    missing_confidence_dims.append(dim)
 
         if preds:
             mbti = "".join(preds)
-            st.success(f"🎯 **Predicted MBTI type: `{mbti}`**")
+            acc = model_accuracies.get(model_choice, None)
 
-            # Show personality breakdown in columns
+            col1, col2 = st.columns(2)
+            with col1:
+                st.success(f"🎯 **Predicted MBTI type: `{mbti}`**")
+            with col2:
+                st.metric("🔧 Model Accuracy", f"{acc * 100:.1f}%", label_visibility="visible")
+
+            # Show MBTI breakdown
             st.subheader("🧩 Personality Breakdown")
             col1, col2, col3, col4 = st.columns(4)
             for i, col in enumerate([col1, col2, col3, col4]):
                 letter = preds[i]
                 col.metric(f"{list(label_map.keys())[i]}", letter, mbti_descriptions[letter])
 
-            # Tabs for confidence and details
+            # Tabs
             tab1, tab2 = st.tabs(["📊 Confidence", "🔎 Details"])
             with tab1:
                 if probs_out:
                     for dim, scores in probs_out.items():
                         st.markdown(f"**{dim}** — {list(scores.items())[0][0]}: {list(scores.items())[0][1]}, "
                                     f"{list(scores.items())[1][0]}: {list(scores.items())[1][1]}")
+                if missing_confidence_dims:
+                    st.info("ℹ️ This model does not provide confidence scores for:")
+                    st.markdown(", ".join(missing_confidence_dims))
 
             with tab2:
-                st.markdown(f"**Full MBTI Type Description:**")
+                st.markdown("**Full MBTI Type Description:**")
                 for letter in mbti:
                     st.markdown(f"- **{letter}**: {mbti_descriptions[letter]}")
 
-            # Confidence alerts
             if low_conf_warnings:
                 st.warning("⚠️ Some predictions have low confidence:")
                 for msg in low_conf_warnings:
