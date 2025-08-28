@@ -154,10 +154,14 @@ st.markdown(f"📝 Word count: **{word_count}**")
 # Show wordcloud of user input
 if user_input:
     wordcloud = WordCloud().generate(user_input)
-    plt.figure(figsize=(8, 6))
-    plt.imshow(wordcloud, interpolation='bilinear')
-    plt.axis('off')
-    st.pyplot()
+    
+    # Create a figure and axis explicitly
+    fig, ax = plt.subplots(figsize=(8, 6))
+    
+    # Display the wordcloud
+    ax.imshow(wordcloud, interpolation='bilinear')
+    ax.axis('off')  # Hide axis
+    st.pyplot(fig)  # Pass the figure to st.pyplot
 
 if st.button("🚀 Predict"):
     if not is_valid_input(user_input):
