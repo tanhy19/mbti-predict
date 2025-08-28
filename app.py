@@ -67,29 +67,31 @@ mbti_descriptions = {
 st.set_page_config(page_title="MBTI Predictor", page_icon="🔮", layout="centered")
 
 st.title("🔮 MBTI Personality Predictor")
-st.markdown("Enter a **meaningful paragraph or sentence** to predict your MBTI personality type using machine learning.")
+st.markdown("Enter a paragraph or meaningful sentence and choose a model to predict your MBTI type.")
 
 # Accuracy display
-with st.expander("ℹ️ Model Accuracy Info"):
+with st.expander("📈 Model Accuracy Info"):
     for model_name, acc in model_accuracies.items():
         st.write(f"**{model_name}**: {acc*100:.1f}% accuracy")
 
-# Inputs
-user_input = st.text_area("📝 Your Text:", height=200, placeholder="e.g. I enjoy spending time alone reflecting on ideas and possibilities.")
-model_choice = st.selectbox("🧠 Choose a model:", list(models.keys()), index=1)
+# Input section
+st.markdown("### 🧠 Your Input")
+user_input = st.text_area("Write about yourself:", height=200, placeholder="e.g. I love solving problems and organizing ideas logically.")
+model_choice = st.selectbox("Select a model:", list(models.keys()), index=1)
 
 # ------------------ Prediction ------------------ #
-if st.button("Predict"):
+if st.button("🚀 Predict"):
     if not is_valid_input(user_input):
         st.warning("⚠️ Please enter a complete sentence or paragraph with at least 5 words.")
     elif vectorizer is None:
         st.error("❌ Vectorizer file missing.")
     else:
-        st.info("🔄 Analyzing input and predicting MBTI...")
+        st.info("🔄 Processing input and predicting MBTI type...")
 
         X_input = vectorizer.transform([user_input])
         preds = []
         probs_out = {}
+        decision_scores = {}
         low_conf_warnings = []
         missing_confidence_dims = []
 
@@ -100,7 +102,6 @@ if st.button("Predict"):
                 letter = label_map[dim][raw_pred]
                 preds.append(letter)
 
-                # Check confidence support
                 if hasattr(model, "predict_proba"):
                     proba = model.predict_proba(X_input)[0]
                     probs_out[dim] = {
@@ -110,6 +111,9 @@ if st.button("Predict"):
 
                     if max(proba) < 0.6:
                         low_conf_warnings.append(f"🔍 Low confidence in **{dim}** — try providing more text.")
+                elif hasattr(model, "decision_function"):
+                    decision = model.decision_function(X_input)
+                    decision_scores[dim] = round(abs(decision[0]), 3)
                 else:
                     missing_confidence_dims.append(dim)
 
@@ -117,56 +121,62 @@ if st.button("Predict"):
             mbti = "".join(preds)
             acc = model_accuracies.get(model_choice, None)
 
-            col1, col2 = st.columns(2)
+            # Results Summary
+            st.markdown("---")
+            col1, col2 = st.columns([2, 1])
             with col1:
-                st.success(f"🎯 **Predicted MBTI type: `{mbti}`**")
+                st.success(f"🎯 **Predicted MBTI Type: `{mbti}`**")
             with col2:
-                st.metric("🔧 Model Accuracy", f"{acc * 100:.1f}%", label_visibility="visible")
+                st.metric("📊 Model Accuracy", f"{acc * 100:.1f}%")
 
-            # Show MBTI breakdown
-            st.subheader("🧩 Personality Breakdown")
+            # MBTI Letter Breakdown
+            st.subheader("🧩 MBTI Breakdown")
             col1, col2, col3, col4 = st.columns(4)
             for i, col in enumerate([col1, col2, col3, col4]):
                 letter = preds[i]
                 col.metric(f"{list(label_map.keys())[i]}", letter, mbti_descriptions[letter])
 
-            # Tabs
-            tab1, tab2 = st.tabs(["📊 Confidence", "🔎 Details"])
+            # Confidence & Description Tabs
+            tab1, tab2 = st.tabs(["📊 Confidence", "🔎 MBTI Descriptions"])
             with tab1:
                 if probs_out:
+                    st.markdown("#### 🔐 Probability-based Confidence")
                     for dim, scores in probs_out.items():
                         st.markdown(f"**{dim}** — {list(scores.items())[0][0]}: {list(scores.items())[0][1]}, "
                                     f"{list(scores.items())[1][0]}: {list(scores.items())[1][1]}")
+                if decision_scores:
+                    st.markdown("#### 📏 Decision Function Confidence (SVM)")
+                    for dim, score in decision_scores.items():
+                        st.markdown(f"**{dim}** → Distance from boundary: `{score}`")
                 if missing_confidence_dims:
-                    st.info("ℹ️ This model does not provide confidence scores for:")
-                    st.markdown(", ".join(missing_confidence_dims))
+                    st.info("ℹ️ Confidence unavailable for: " + ", ".join(missing_confidence_dims))
 
             with tab2:
-                st.markdown("**Full MBTI Type Description:**")
+                st.markdown("#### 🧠 Your MBTI Letters Explained")
                 for letter in mbti:
                     st.markdown(f"- **{letter}**: {mbti_descriptions[letter]}")
 
             if low_conf_warnings:
                 st.warning("⚠️ Some predictions have low confidence:")
                 for msg in low_conf_warnings:
-                    st.write(msg)
+                    st.markdown(msg)
 
 # ------------------ Sidebar ------------------ #
 with st.sidebar:
-    st.header("🔍 About This App")
+    st.header("📚 About This App")
     st.markdown("""
-This tool uses ML models to predict your **MBTI personality** based on text.
+This app uses **Machine Learning** models to predict your **MBTI personality** from text.
 
-🧬 **4 Dimensions**:
-- **I/E**: Introversion / Extraversion  
-- **N/S**: Intuition / Sensing  
-- **F/T**: Feeling / Thinking  
-- **P/J**: Perceiving / Judging  
+### 🧬 Personality Dimensions:
+- **I / E**: Introversion / Extraversion  
+- **N / S**: Intuition / Sensing  
+- **F / T**: Feeling / Thinking  
+- **P / J**: Perceiving / Judging  
 
-📈 **Model Accuracies**:
+### 📈 Model Accuracies:
 """)
     for name, acc in model_accuracies.items():
         st.write(f"- {name}: {acc*100:.1f}%")
 
     best_model = max(model_accuracies, key=model_accuracies.get)
-    st.markdown(f"✅ **Most Accurate Model:** `{best_model}` ({model_accuracies[best_model]*100:.1f}%)")
+    st.markdown(f"✅ **Best Model**: `{best_model}` ({model_accuracies[best_model]*100:.1f}%)")
