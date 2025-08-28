@@ -18,6 +18,18 @@ def is_valid_input(text):
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
+def predict_single_model(X_input, model, dim):
+    pred = model.predict(X_input)[0]
+    if hasattr(model, "predict_proba"):
+        proba = model.predict_proba(X_input)[0]
+        confidence = max(proba)
+    elif hasattr(model, "decision_function"):
+        decision = model.decision_function(X_input)
+        confidence = sigmoid(decision[0])
+    else:
+        confidence = 0.5  # neutral confidence if unknown
+    return pred, confidence
+
 def ensemble_predict(X_input, dim):
     votes = []
     confidences = []
@@ -25,18 +37,9 @@ def ensemble_predict(X_input, dim):
     for model_name in models.keys():
         model = models[model_name][dim]
         if model:
-            pred = model.predict(X_input)[0]
+            pred, confidence = predict_single_model(X_input, model, dim)
             votes.append(pred)
-
-            if hasattr(model, "predict_proba"):
-                proba = model.predict_proba(X_input)[0]
-                confidences.append(max(proba))
-            elif hasattr(model, "decision_function"):
-                decision = model.decision_function(X_input)
-                conf = sigmoid(decision[0])
-                confidences.append(conf)
-            else:
-                confidences.append(0.5)  # neutral confidence if unknown
+            confidences.append(confidence)
 
     # Majority vote (most common prediction)
     final_pred = max(set(votes), key=votes.count)
@@ -45,7 +48,6 @@ def ensemble_predict(X_input, dim):
     return final_pred, avg_confidence
 
 def confidence_color(value):
-    # Return a color hex based on confidence value 0-1
     if value < 0.5:
         return "#ff4b4b"  # red-ish low confidence
     elif value < 0.7:
@@ -106,10 +108,10 @@ st.set_page_config(page_title="MBTI Predictor", page_icon="🔮", layout="center
 
 st.title("🔮 MBTI Personality Predictor")
 st.markdown(
-    "Enter a paragraph or meaningful sentence to predict your MBTI type using an ensemble of ML models."
+    "Enter a paragraph or meaningful sentence to predict your MBTI type."
 )
 
-# Accuracy display in sidebar
+# Sidebar with About and Model choice
 with st.sidebar:
     st.header("📚 About This App")
     st.markdown("""
@@ -121,13 +123,21 @@ This app uses **Machine Learning** models to predict your **MBTI personality** f
 - **F / T**: Feeling / Thinking  
 - **P / J**: Perceiving / Judging  
 
-### 📈 Individual Model Accuracies:
+### 📈 Model Accuracies:
 """)
     for name, acc in model_accuracies.items():
         st.write(f"- {name}: {acc*100:.1f}%")
 
     best_model = max(model_accuracies, key=model_accuracies.get)
     st.markdown(f"✅ **Best Model**: `{best_model}` ({model_accuracies[best_model]*100:.1f}%)")
+
+    st.markdown("---")
+    st.markdown("### ⚙️ Prediction Mode")
+    mode = st.radio("Choose prediction mode:", ["Ensemble", "Single Model"])
+
+    selected_model = None
+    if mode == "Single Model":
+        selected_model = st.selectbox("Select model:", list(models.keys()))
 
 # Input section
 st.markdown("### 🧠 Your Input")
@@ -152,12 +162,22 @@ if st.button("🚀 Predict"):
         confidences = {}
         low_conf_warnings = []
 
-        for dim in ["I/E", "N/S", "F/T", "P/J"]:
-            pred, conf = ensemble_predict(X_input, dim)
-            preds.append(label_map[dim][pred])
-            confidences[dim] = conf
-            if conf < 0.6:
-                low_conf_warnings.append(f"🔍 Low confidence in **{dim}** — try providing more text.")
+        if mode == "Ensemble":
+            for dim in ["I/E", "N/S", "F/T", "P/J"]:
+                pred, conf = ensemble_predict(X_input, dim)
+                preds.append(label_map[dim][pred])
+                confidences[dim] = conf
+                if conf < 0.6:
+                    low_conf_warnings.append(f"🔍 Low confidence in **{dim}** — try providing more text.")
+
+        else:  # Single model selected
+            for dim in ["I/E", "N/S", "F/T", "P/J"]:
+                model = models[selected_model][dim]
+                pred, conf = predict_single_model(X_input, model, dim)
+                preds.append(label_map[dim][pred])
+                confidences[dim] = conf
+                if conf < 0.6:
+                    low_conf_warnings.append(f"🔍 Low confidence in **{dim}** — try providing more text.")
 
         mbti = "".join(preds)
 
@@ -166,8 +186,12 @@ if st.button("🚀 Predict"):
         with col1:
             st.success(f"🎯 **Predicted MBTI Type: `{mbti}`**")
         with col2:
-            avg_acc = np.mean(list(model_accuracies.values()))
-            st.metric("📊 Average Model Accuracy", f"{avg_acc*100:.1f}%")
+            if mode == "Ensemble":
+                avg_acc = np.mean(list(model_accuracies.values()))
+                st.metric("📊 Average Model Accuracy", f"{avg_acc*100:.1f}%")
+            else:
+                acc = model_accuracies.get(selected_model, None)
+                st.metric("📊 Model Accuracy", f"{acc*100:.1f}%" if acc else "N/A")
 
         # MBTI Letter Breakdown
         st.subheader("🧩 MBTI Breakdown")
