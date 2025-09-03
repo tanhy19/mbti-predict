@@ -115,6 +115,86 @@ mbti_descriptions = {
 }
 
 # ------------------ UI Layout ------------------ #
+
+# Apply custom dark theme with cool vibes
+st.markdown("""
+    <style>
+        /* Global Background */
+        body {
+            background-color: #1e1e1e;
+            color: #f5f5f5;
+        }
+
+        /* Title and Subtitle */
+        .title {
+            color: #00bcd4;  /* Cool cyan blue */
+        }
+        
+        .subtitle {
+            color: #cfd8dc;  /* Light grey with a cool vibe */
+        }
+
+        /* Sidebar */
+        .sidebar .sidebar-content {
+            background-color: #263238; /* Dark slate blue */
+            color: #80deea; /* Light cyan for sidebar text */
+        }
+        .sidebar .sidebar-header {
+            background-color: #37474f; /* Slightly lighter background for header */
+            color: #ffffff;
+        }
+        
+        /* Buttons */
+        .stButton > button {
+            background-color: #00bcd4; /* Cool cyan blue */
+            color: white;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+
+        .stButton > button:hover {
+            background-color: #0288d1; /* Darker blue when hovered */
+        }
+
+        /* Input Fields */
+        .stTextInput > div > input {
+            background-color: #37474f;
+            color: #ffffff;
+            border: 1px solid #00bcd4;
+        }
+
+        .stTextArea > div > textarea {
+            background-color: #37474f;
+            color: #ffffff;
+            border: 1px solid #00bcd4;
+        }
+
+        /* Metrics */
+        .stMetric > div {
+            background-color: #37474f;
+            color: #00bcd4;
+            border: 1px solid #00bcd4;
+        }
+
+        /* Expander */
+        .stExpanderHeader {
+            background-color: #263238; /* Dark slate */
+            color: #ffffff;
+        }
+
+        .stExpanderContent {
+            background-color: #37474f;
+            color: #ffffff;
+        }
+
+        /* Progress Bar */
+        .stProgressBar div {
+            background-color: #00bcd4;
+        }
+        
+    </style>
+""", unsafe_allow_html=True)
+
 st.set_page_config(page_title="MBTI Predictor", page_icon="🔮", layout="centered")
 
 st.title("🔮 MBTI Personality Predictor")
