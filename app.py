@@ -7,7 +7,9 @@ from wordcloud import WordCloud
 import matplotlib.pyplot as plt
 
 # ------------------ Helper Functions ------------------ #
+
 def safe_load(path):
+    """Load model from a file, with error handling if the file is missing."""
     if os.path.exists(path):
         return joblib.load(path)
     else:
@@ -15,12 +17,15 @@ def safe_load(path):
         return None
 
 def is_valid_input(text):
+    """Check if the user input is a valid sentence (at least 5 words)."""
     return bool(re.search(r'[a-zA-Z]{3,}', text)) and len(text.strip().split()) >= 5
 
 def sigmoid(x):
+    """Sigmoid function for confidence calculation."""
     return 1 / (1 + np.exp(-x))
 
 def predict_single_model(X_input, model, dim):
+    """Predict the output for a single model and calculate confidence."""
     pred = model.predict(X_input)[0]
     if hasattr(model, "predict_proba"):
         proba = model.predict_proba(X_input)[0]
@@ -29,13 +34,15 @@ def predict_single_model(X_input, model, dim):
         decision = model.decision_function(X_input)
         confidence = sigmoid(decision[0])
     else:
-        confidence = 0.5  # neutral confidence if unknown
+        confidence = 0.5  # Neutral confidence if unknown
     return pred, confidence
 
 def ensemble_predict(X_input, dim):
+    """Perform an ensemble prediction by aggregating the results from different models."""
     votes = []
     confidences = []
 
+    # Aggregate predictions from each model
     for model_name in models.keys():
         model = models[model_name][dim]
         if model:
@@ -50,6 +57,7 @@ def ensemble_predict(X_input, dim):
     return final_pred, avg_confidence
 
 def confidence_color(value):
+    """Determine the color based on the confidence level."""
     if value < 0.5:
         return "#ff4b4b"  # red-ish low confidence
     elif value < 0.7:
@@ -58,8 +66,9 @@ def confidence_color(value):
         return "#2ecc71"  # green high confidence
 
 # ------------------ Load Resources ------------------ #
-vectorizer = safe_load("vectorizer.pkl")
+vectorizer = safe_load("vectorizer.pkl")  # Load vectorizer for text transformation
 
+# Load different models for each personality dimension
 models = {
     "Naive Bayes": {
         "I/E": safe_load("naivebayes_ie.pkl"),
