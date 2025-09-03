@@ -9,66 +9,102 @@ import matplotlib.pyplot as plt
 # ------------------ Helper Functions ------------------ #
 
 def safe_load(path):
-    """Load model from a file, with error handling if the file is missing."""
+    """
+    Helper function to load a model from a file.
+    If the model file does not exist, an error message will be shown.
+    :param path: The path to the model file.
+    :return: The loaded model or None if the file does not exist.
+    """
     if os.path.exists(path):
         return joblib.load(path)
     else:
-        st.error(f"❌ Missing file: {path}")
+        st.error(f"❌ Missing file: {path}")  # Display an error if the file is not found.
         return None
 
 def is_valid_input(text):
-    """Check if the user input is a valid sentence (at least 5 words)."""
+    """
+    Validates the user input text to ensure it contains at least 5 words and 
+    consists of valid alphanumeric characters.
+    :param text: The input text from the user.
+    :return: True if valid input, False otherwise.
+    """
     return bool(re.search(r'[a-zA-Z]{3,}', text)) and len(text.strip().split()) >= 5
 
 def sigmoid(x):
-    """Sigmoid function for confidence calculation."""
+    """
+    Sigmoid activation function used for converting output into a probability (confidence).
+    :param x: The input value from model prediction.
+    :return: A value between 0 and 1 representing confidence.
+    """
     return 1 / (1 + np.exp(-x))
 
 def predict_single_model(X_input, model, dim):
-    """Predict the output for a single model and calculate confidence."""
-    pred = model.predict(X_input)[0]
+    """
+    Makes a prediction using a single model and calculates confidence.
+    The model used can be Naive Bayes, SVM, or Random Forest.
+    :param X_input: The transformed input text for prediction.
+    :param model: The machine learning model to use for prediction.
+    :param dim: The MBTI dimension (I/E, N/S, F/T, P/J) for prediction.
+    :return: The predicted class and its confidence score.
+    """
+    pred = model.predict(X_input)[0]  # Make the prediction.
+    
+    # Calculate confidence based on the model's methods (predict_proba or decision_function).
     if hasattr(model, "predict_proba"):
-        proba = model.predict_proba(X_input)[0]
-        confidence = max(proba)
+        proba = model.predict_proba(X_input)[0]  # Get probability of the classes.
+        confidence = max(proba)  # Maximum probability is used as the confidence.
     elif hasattr(model, "decision_function"):
         decision = model.decision_function(X_input)
-        confidence = sigmoid(decision[0])
+        confidence = sigmoid(decision[0])  # Use sigmoid on the decision function for confidence.
     else:
-        confidence = 0.5  # Neutral confidence if unknown
+        confidence = 0.5  # Default confidence if no specific method is available.
+    
     return pred, confidence
 
 def ensemble_predict(X_input, dim):
-    """Perform an ensemble prediction by aggregating the results from different models."""
-    votes = []
-    confidences = []
+    """
+    Aggregates predictions from multiple models and applies a majority vote.
+    The final prediction is based on the majority class predicted across all models.
+    :param X_input: The transformed input text for prediction.
+    :param dim: The MBTI dimension (I/E, N/S, F/T, P/J).
+    :return: The final prediction and the average confidence from all models.
+    """
+    votes = []  # Store predictions from all models.
+    confidences = []  # Store confidence values from all models.
 
-    # Aggregate predictions from each model
+    # Loop through each model (Naive Bayes, SVM, and Random Forest) for the given dimension.
     for model_name in models.keys():
         model = models[model_name][dim]
-        if model:
+        if model:  # Ensure the model exists before prediction.
             pred, confidence = predict_single_model(X_input, model, dim)
-            votes.append(pred)
-            confidences.append(confidence)
+            votes.append(pred)  # Store the prediction.
+            confidences.append(confidence)  # Store the confidence.
 
-    # Majority vote (most common prediction)
+    # Majority vote: Choose the most frequent prediction.
     final_pred = max(set(votes), key=votes.count)
-    avg_confidence = np.mean(confidences)
+    avg_confidence = np.mean(confidences)  # Calculate the average confidence of all models.
 
     return final_pred, avg_confidence
 
 def confidence_color(value):
-    """Determine the color based on the confidence level."""
+    """
+    Assigns a color based on the confidence level for visual representation.
+    Low confidence (below 0.5) is marked with red, medium with orange, and high with green.
+    :param value: The confidence score (between 0 and 1).
+    :return: The color associated with the confidence level.
+    """
     if value < 0.5:
-        return "#ff4b4b"  # red-ish low confidence
+        return "#ff4b4b"  # Red color for low confidence.
     elif value < 0.7:
-        return "#f5a623"  # orange medium
+        return "#f5a623"  # Orange color for medium confidence.
     else:
-        return "#2ecc71"  # green high confidence
+        return "#2ecc71"  # Green color for high confidence.
 
 # ------------------ Load Resources ------------------ #
-vectorizer = safe_load("vectorizer.pkl")  # Load vectorizer for text transformation
 
-# Load different models for each personality dimension
+vectorizer = safe_load("vectorizer.pkl")  # Load the vectorizer to convert input text into numerical features.
+
+# Load the trained models for different MBTI dimensions (I/E, N/S, F/T, P/J) from disk.
 models = {
     "Naive Bayes": {
         "I/E": safe_load("naivebayes_ie.pkl"),
@@ -103,6 +139,7 @@ label_map = {
     "P/J": {0: "P", 1: "J"}
 }
 
+# Descriptions of each MBTI letter for later explanation in the app.
 mbti_descriptions = {
     "I": "Introverted: energized by solitude, introspective.",
     "E": "Extraverted: energized by social interaction, outgoing.",
@@ -116,7 +153,7 @@ mbti_descriptions = {
 
 # ------------------ UI Layout ------------------ #
 
-# Apply custom dark theme with cool vibes
+# CAA styling
 st.markdown("""
     <style>
         /* Global Background */
@@ -195,14 +232,16 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# Set the page configuration for the Streamlit app
 st.set_page_config(page_title="MBTI Predictor", page_icon="🔮", layout="centered")
 
+# Title of the app
 st.title("🔮 MBTI Personality Predictor")
 st.markdown(
     "Enter a paragraph or meaningful sentence to predict your MBTI type."
 )
 
-# Sidebar with About and Model choice
+# Sidebar for About section and model selection
 with st.sidebar:
     st.header("📚 About This App")
     st.markdown(""" 
@@ -230,17 +269,19 @@ This app uses **Machine Learning** models to predict your **MBTI personality** f
     if mode == "Single Model":
         selected_model = st.selectbox("Select model:", list(models.keys()))
 
-# Input section
+# Input section for user to write about themselves
 st.markdown("### 🧠 Your Input")
 user_input = st.text_area(
     "Write about yourself (at least 5 words):", 
     height=200, 
     placeholder="e.g. I enjoy spending quiet time reflecting on my thoughts and feelings."
 )
+
+# Display the word count of the input text
 word_count = len(user_input.strip().split())
 st.markdown(f"📝 Word count: **{word_count}**")
 
-# Show wordcloud of user input
+# Show a wordcloud of the input text
 if user_input:
     wordcloud = WordCloud().generate(user_input)
     
@@ -252,6 +293,7 @@ if user_input:
     ax.axis('off')  # Hide axis
     st.pyplot(fig)  # Pass the figure to st.pyplot
 
+# Button to trigger prediction
 if st.button("🚀 Predict"):
     if not is_valid_input(user_input):
         st.warning("⚠️ Please enter a complete sentence or paragraph with at least 5 words.")
@@ -267,6 +309,7 @@ if st.button("🚀 Predict"):
 
         with st.spinner("Analyzing your text..."):
             if mode == "Ensemble":
+                # Ensemble method: Predict for all dimensions (I/E, N/S, F/T, P/J) using all models
                 for dim in ["I/E", "N/S", "F/T", "P/J"]:
                     pred, conf = ensemble_predict(X_input, dim)
                     preds.append(label_map[dim][pred])
@@ -275,6 +318,7 @@ if st.button("🚀 Predict"):
                         low_conf_warnings.append(f"🔍 Low confidence in **{dim}** — try providing more text.")
 
             else:  # Single model selected
+                # Single model method: Predict for all dimensions using the selected model
                 for dim in ["I/E", "N/S", "F/T", "P/J"]:
                     model = models[selected_model][dim]
                     pred, conf = predict_single_model(X_input, model, dim)
